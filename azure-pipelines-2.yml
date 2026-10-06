@@ -9,98 +9,116 @@ variables:
 
 stages:
 
-# ==================================================
-# STAGE 1 - BUILD / VALIDATE / PLAN
-# ==================================================
+# ==========================================
+# BUILD
+# ==========================================
 
 - stage: Build
-  displayName: 'Build and Terraform Plan'
+  displayName: 'Build - Terraform Validate and Plan'
 
   jobs:
   - job: TerraformPlan
+    displayName: 'Terraform Plan'
 
     steps:
 
-    - task: TerraformInstaller@1
-      displayName: 'Install Terraform'
-      inputs:
-        terraformVersion: $(terraformVersion)
+    # Install Terraform
+    - bash: |
+        sudo apt-get update
+        sudo apt-get install -y unzip
 
-    - script: |
+        wget https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
+
+        unzip terraform_$(terraformVersion)_linux_amd64.zip
+
+        sudo mv terraform /usr/local/bin/
+
+        terraform version
+      displayName: 'Install Terraform'
+
+
+    # Terraform Format
+    - bash: |
         terraform fmt -check
       displayName: 'Terraform Format Check'
 
-    - task: TerraformCLI@2
+
+    # Terraform Init
+    - bash: |
+        terraform init
       displayName: 'Terraform Init'
-      inputs:
-        command: init
-        workingDirectory: '$(System.DefaultWorkingDirectory)'
 
-    - task: TerraformCLI@2
+
+    # Terraform Validate
+    - bash: |
+        terraform validate
       displayName: 'Terraform Validate'
-      inputs:
-        command: validate
-        workingDirectory: '$(System.DefaultWorkingDirectory)'
-
-    - task: TerraformCLI@2
-      displayName: 'Terraform Plan - DEV'
-      inputs:
-        command: plan
-        workingDirectory: '$(System.DefaultWorkingDirectory)'
-        commandOptions: '-var-file=environments/dev.tfvars'
-        environmentServiceNameAzureRM: 'Azure-Terraform-Connection'
 
 
-# ==================================================
-# STAGE 2 - DEV
-# ==================================================
+    # Terraform Plan
+    - bash: |
+        terraform plan \
+          -var-file="environments/dev.tfvars"
+      displayName: 'Terraform Plan'
+
+
+# ==========================================
+# DEV
+# ==========================================
 
 - stage: Dev
   displayName: 'Deploy to DEV'
+
   dependsOn: Build
+
   condition: succeeded()
 
   jobs:
-  - deployment: TerraformDev
+
+  - job: TerraformDev
     displayName: 'Terraform Apply DEV'
 
-    environment: terraform-dev
+    steps:
 
-    strategy:
-      runOnce:
-        deploy:
-          steps:
+    - bash: |
+        sudo apt-get update
+        sudo apt-get install -y unzip wget
 
-          - task: TerraformInstaller@1
-            displayName: 'Install Terraform'
-            inputs:
-              terraformVersion: $(terraformVersion)
+        wget https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
 
-          - task: TerraformCLI@2
-            displayName: 'Terraform Init'
-            inputs:
-              command: init
-              workingDirectory: '$(System.DefaultWorkingDirectory)'
+        unzip terraform_$(terraformVersion)_linux_amd64.zip
 
-          - task: TerraformCLI@2
-            displayName: 'Terraform Apply DEV'
-            inputs:
-              command: apply
-              workingDirectory: '$(System.DefaultWorkingDirectory)'
-              commandOptions: '-var-file=environments/dev.tfvars -auto-approve'
-              environmentServiceNameAzureRM: 'Azure-Terraform-Connection'
+        sudo mv terraform /usr/local/bin/
+
+        terraform version
+      displayName: 'Install Terraform'
 
 
-# ==================================================
-# STAGE 3 - PRODUCTION
-# ==================================================
+    - bash: |
+        terraform init
+      displayName: 'Terraform Init'
+
+
+    - bash: |
+        terraform apply \
+          -var-file="environments/dev.tfvars" \
+          -auto-approve
+      displayName: 'Terraform Apply DEV'
+
+
+# ==========================================
+# PRODUCTION
+# ==========================================
 
 - stage: Production
   displayName: 'Deploy to PRODUCTION'
+
   dependsOn: Dev
+
   condition: succeeded()
 
   jobs:
+
   - deployment: TerraformProduction
     displayName: 'Terraform Apply PRODUCTION'
 
@@ -109,23 +127,30 @@ stages:
     strategy:
       runOnce:
         deploy:
+
           steps:
 
-          - task: TerraformInstaller@1
+          - bash: |
+              sudo apt-get update
+              sudo apt-get install -y unzip wget
+
+              wget https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
+
+              unzip terraform_$(terraformVersion)_linux_amd64.zip
+
+              sudo mv terraform /usr/local/bin/
+
+              terraform version
             displayName: 'Install Terraform'
-            inputs:
-              terraformVersion: $(terraformVersion)
 
-          - task: TerraformCLI@2
+
+          - bash: |
+              terraform init
             displayName: 'Terraform Init'
-            inputs:
-              command: init
-              workingDirectory: '$(System.DefaultWorkingDirectory)'
 
-          - task: TerraformCLI@2
+
+          - bash: |
+              terraform apply \
+                -var-file="environments/prod.tfvars" \
+                -auto-approve
             displayName: 'Terraform Apply PRODUCTION'
-            inputs:
-              command: apply
-              workingDirectory: '$(System.DefaultWorkingDirectory)'
-              commandOptions: '-var-file=environments/prod.tfvars -auto-approve'
-              environmentServiceNameAzureRM: 'Azure-Terraform-Connection'

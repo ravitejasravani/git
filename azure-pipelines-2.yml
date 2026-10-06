@@ -1,0 +1,131 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  terraformVersion: '1.9.0'
+
+stages:
+
+# ==================================================
+# STAGE 1 - BUILD / VALIDATE / PLAN
+# ==================================================
+
+- stage: Build
+  displayName: 'Build and Terraform Plan'
+
+  jobs:
+  - job: TerraformPlan
+
+    steps:
+
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - script: |
+        terraform fmt -check
+      displayName: 'Terraform Format Check'
+
+    - task: TerraformCLI@2
+      displayName: 'Terraform Init'
+      inputs:
+        command: init
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+    - task: TerraformCLI@2
+      displayName: 'Terraform Validate'
+      inputs:
+        command: validate
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+    - task: TerraformCLI@2
+      displayName: 'Terraform Plan - DEV'
+      inputs:
+        command: plan
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        commandOptions: '-var-file=environments/dev.tfvars'
+        environmentServiceNameAzureRM: 'Azure-Terraform-Connection'
+
+
+# ==================================================
+# STAGE 2 - DEV
+# ==================================================
+
+- stage: Dev
+  displayName: 'Deploy to DEV'
+  dependsOn: Build
+  condition: succeeded()
+
+  jobs:
+  - deployment: TerraformDev
+    displayName: 'Terraform Apply DEV'
+
+    environment: terraform-dev
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformCLI@2
+            displayName: 'Terraform Init'
+            inputs:
+              command: init
+              workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+          - task: TerraformCLI@2
+            displayName: 'Terraform Apply DEV'
+            inputs:
+              command: apply
+              workingDirectory: '$(System.DefaultWorkingDirectory)'
+              commandOptions: '-var-file=environments/dev.tfvars -auto-approve'
+              environmentServiceNameAzureRM: 'Azure-Terraform-Connection'
+
+
+# ==================================================
+# STAGE 3 - PRODUCTION
+# ==================================================
+
+- stage: Production
+  displayName: 'Deploy to PRODUCTION'
+  dependsOn: Dev
+  condition: succeeded()
+
+  jobs:
+  - deployment: TerraformProduction
+    displayName: 'Terraform Apply PRODUCTION'
+
+    environment: terraform-prod
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformCLI@2
+            displayName: 'Terraform Init'
+            inputs:
+              command: init
+              workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+          - task: TerraformCLI@2
+            displayName: 'Terraform Apply PRODUCTION'
+            inputs:
+              command: apply
+              workingDirectory: '$(System.DefaultWorkingDirectory)'
+              commandOptions: '-var-file=environments/prod.tfvars -auto-approve'
+              environmentServiceNameAzureRM: 'Azure-Terraform-Connection'

@@ -1,19 +1,28 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
 trigger:
-- main
+  - main
 
+# Define the global operating system for your jobs
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'ubuntu-latest'
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+stages:
+  # 1. BUILD STAGE
+  - stage: Build
+    displayName: 'Build Application'
+    jobs:
+      - job: CompileJob
+        steps:
+          - script: echo "Restoring dependencies..."
+            displayName: 'Restore'
+          - script: echo "Compiling code..."
+            displayName: 'Compile'
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+  # 2. TEST STAGE
+  - stage: Test
+    displayName: 'Run Unit Tests'
+    dependsOn: Build # Only runs if the Build stage succeeds
+    jobs:
+      - job: TestJob
+        steps:
+          - script: echo "Running automated tests..."
+            displayName: 'Run Tests'
